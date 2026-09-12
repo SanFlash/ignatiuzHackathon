@@ -128,3 +128,12 @@ No hiring recommendation, protected-characteristic inference or candidate rankin
 Selection remains deterministic: the engine chooses the skill, difficulty and unused bank slot. OpenAI may supply a new validated question for that slot, informed by the previous answer excerpt, local evaluation and gaps. Thus selection is deterministic, while generated wording is model-dependent. The server persists the full question and answer/rubric snapshot privately on the attempt and records it with the response for auditability. Refreshing does not regenerate the question. The shared bank and its points are unchanged.
 
 MCQs and report follow-ups are local. Written answers use OpenAI grading (240 output-token cap); each new question uses a separate OpenAI generation request (360 output-token cap). There is no report-generation API call. A failed/malformed generation uses the selected bank item and activates a 60-second cooldown. No new question is produced by the LLM when the engine has reached a termination condition. Existing Supabase installations must apply the updated schema and RPC together.
+
+
+## Latency optimization without changing adaptive decisions
+
+During a written-answer turn, the next evidence count and confidence are known before grading: their formulas do not use correctness. If the hard coverage guard excludes the current competency from the next ranking, every eligible skill estimate is unchanged. In that case, the next selected bank slot is mathematically independent of the pending grade.
+
+The service then grades the submitted answer and generates that independently selected question concurrently. Generation receives the actual answer excerpt, without an invented score. After grading, the normal adaptive engine recomputes and verifies selection before saving the question. When the current skill can participate in the ranking, execution stays sequential. Termination is checked before any parallel generation. No alternative branches are generated and discarded as a normal operation.
+
+The answer, final state and chosen question snapshot still persist together through the existing transaction boundary. Candidate-safe JSON is built from the just-committed state, avoiding redundant database reads. The UI updates the question using that JSON; it does not calculate scores or select questions.

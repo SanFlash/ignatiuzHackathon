@@ -1,0 +1,25 @@
+{
+  "measurement": "controlled simulated latency, not live OpenAI",
+  "results": [
+    {
+      "scenario": "eligible_written_transition",
+      "before_ms": 241.92,
+      "after_ms": 126.66,
+      "reduction_percent": 47.6,
+      "before_reads": 8,
+      "after_reads": 5,
+      "generation_calls": 1,
+      "grading_calls": 1
+    },
+    {
+      "scenario": "complete_assessment",
+      "before_ms": 2836.62,
+      "after_ms": 2110.23,
+      "reduction_percent": 25.6,
+      "before_reads": 121,
+      "after_reads": 77,
+      "generation_calls": 15,
+      "grading_calls": 7
+    }
+  ]
+}

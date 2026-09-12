@@ -1,5 +1,21 @@
 # Aptiva — OpenAI Adaptive Assessment
 
+## Fix branch from your uploaded project
+
+This version is based on the supplied `adaptive-assessment (3).zip`, on branch `fix/question-speed-and-reliability`. The full source and a portable `branch-history.bundle` are included. See `docs/FIXES.md` for changes, verification and measured results.
+
+Questions now update in place using the existing JSON API. Failed submissions preserve the current answer and reconcile saved progress before a retry. Written-answer grading and next-question generation run concurrently **only when the hard coverage guard proves next selection is independent of the pending grade**. Other turns remain sequential. This reduces waiting without generating unused questions or adding API requests.
+
+To update, extract into a new folder, copy your existing `.env` into it, reinstall requirements using the commands below, then run `python run.py --demo` with the new folder's virtual environment. The demo uses temporary memory; restarting resets its attempts.
+
+Optional Git workflow from the extracted folder:
+
+```bash
+git clone branch-history.bundle aptiva-git
+cd aptiva-git
+git switch fix/question-speed-and-reliability
+```
+
 **One API key enables both question generation and written-answer evaluation.** No Supabase account or other AI provider is needed for local use.
 
 1. Install dependencies using the Windows or Linux/macOS commands below.
@@ -25,7 +41,7 @@ OPENAI_API_KEY=your-openai-api-key
 | Refresh an existing question | Saved snapshot, zero AI tokens |
 | Build report / interview follow-ups | Local, zero AI tokens |
 
-The generation prompt includes only the current skill/difficulty, a short answer excerpt and a few gaps/recent questions. Written answers are limited to 3,000 characters in both the UI and backend. There is no full-chat-history replay. A written-answer turn may make two calls: grading first, then generation at the deterministically updated difficulty. These are request caps, not promised total usage or price.
+The generation prompt includes only the current skill/difficulty, a short answer excerpt and a few gaps/recent questions. Written answers are limited to 3,000 characters in both the UI and backend. There is no full-chat-history replay. A written-answer turn may make two calls. They overlap when next selection is provably independent of the pending grade; otherwise grading finishes before generation. These are request caps, not promised total usage or price.
 
 Timeouts, unavailable credits, bad keys and malformed results use the local bank/evaluator. Network/JSON failures activate a 60-second cooldown; requests have a 12-second timeout and no automatic retries. The report labels evaluation sources. Generated answer keys and grading still require human review.
 
@@ -105,7 +121,7 @@ The development server binds to loopback only and disables debug mode. `FLASK_EN
 7. Open **Recruiter workspace** to review candidate activity and completed reports.
 8. Use **Create assessment**, enter competencies and limits, then add questions for each competency.
 
-The candidate's current question is preserved across refreshes. Submissions are final. Multiple tabs cannot submit the same question twice. A repeated request receives HTTP 409; refreshing the attempt shows its latest state.
+The candidate's current question is preserved across refreshes. Submissions are final. Multiple tabs cannot persist the same question twice. Duplicate in-flight requests in the same server process are rejected before AI calls. A repeated request receives HTTP 409; refreshing the attempt shows its latest state.
 
 The bank is locked after the first attempt to avoid changing questions during an assessment. For changes, create a new assessment. Coding questions can be stored, but are explicitly excluded from live selection until a secure execution service is implemented.
 
@@ -168,6 +184,8 @@ adaptive-assessment/
 │   ├── test_routes.py
 │   ├── test_supabase_repository.py
 │   ├── test_openai_integration.py
+│   ├── test_performance_reliability.py
+│   ├── benchmark_transitions.py
 │   └── e2e_http.py
 ├── docs/
 │   ├── adaptive-logic.md
@@ -202,7 +220,7 @@ Generate a secret using your virtual environment's Python:
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Copy it into `.env`. Do not commit `.env`. Backend credentials never appear in templates or static JavaScript. Changing environment variables requires restarting the application.
+Copy it into `.env`. Do not commit `.env`. Backend credentials never appear in templates or static JavaScript. Changing environment variables requires restarting the application. Static assets use content-versioned URLs and short caching; candidate pages and API responses remain no-store.
 
 If only one Supabase variable is set, startup stops with a clear configuration error. A database error does **not** silently switch an existing persistent application into memory mode.
 

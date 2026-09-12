@@ -2,6 +2,7 @@ import hmac
 from functools import wraps
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 from app.errors import AppError
+from app.services.catalog_service import identifier
 
 bp = Blueprint('web', __name__)
 
@@ -20,8 +21,9 @@ def recruiter_required(fn):
 
 
 def attempt_access(attempt_id):
-    service().get_attempt(attempt_id)
+    attempt_id = identifier(attempt_id)
     if attempt_id not in session.get('attempts', []) and not session.get('recruiter'):
+        service().get_attempt(attempt_id)
         raise AppError('Open this attempt in the browser where you started it.', 403)
 
 
@@ -33,7 +35,7 @@ def home(): return render_template('index.html', assessments=catalog().list_asse
 def login():
     if request.method == 'POST':
         expected = current_app.config['RECRUITER_PASSWORD']
-        if not expected or hmac.compare_digest(request.form.get('password', ''), expected):
+        if not expected or hmac.compare_digest(request.form.get('password', '').encode('utf-8'), expected.encode('utf-8')):
             session['recruiter'] = True
             return redirect(url_for('web.recruiter'))
         raise AppError('Invalid recruiter password.', 403)

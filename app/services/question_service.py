@@ -27,8 +27,10 @@ class QuestionService:
                    'avoid': [q[:160] for q in seen[-5:]]}
         if previous:
             context['last'] = {'skill': previous['skill'], 'question': previous['question_text'][:200],
-                'answer': answer[:800], 'score': evaluation['score'],
-                'gaps': [s[:100] for s in evaluation['weaknesses'][:3]]}
+                'answer': answer[:800]}
+            if evaluation is not None:
+                context['last'].update(score=evaluation['score'],
+                    gaps=[s[:100] for s in evaluation['weaknesses'][:3]])
         try:
             data = self.ai._json(context,
                 'Create one NEW technical question at the given skill, difficulty and type. '
@@ -63,14 +65,18 @@ class QuestionService:
             if (not isinstance(options, list) or len(options) != 4
                     or any(not isinstance(x, str) or not x.strip() or len(x) > 200 for x in options)
                     or len({x.strip().casefold() for x in options}) != 4
-                    or data.get('correct_answer') not in options):
+                    or not isinstance(data.get('correct_answer'), str)
+                    or data['correct_answer'].strip() not in [x.strip() for x in options]):
                 raise ValueError('Invalid MCQ')
-            result.update(options=options, correct_answer=data['correct_answer'], rubric={})
+            result.update(options=[x.strip() for x in options], correct_answer=data['correct_answer'].strip(), rubric={})
         elif selected['question_type'] == 'Subjective':
             concepts = data.get('concepts')
             if (not isinstance(concepts, list) or not 3 <= len(concepts) <= 5
                     or any(not isinstance(x, str) or not x.strip(' |') or len(x) > 100 for x in concepts)):
                 raise ValueError('Invalid rubric')
+            concepts = ['|'.join(alias.strip() for alias in term.split('|') if alias.strip()) for term in concepts]
+            if any(not term for term in concepts) or len(set(concepts)) != len(concepts):
+                raise ValueError('Empty or duplicate rubric concept')
             result.update(options=[], correct_answer=None, rubric={'concepts': concepts, 'min_words': 40})
         else:
             raise ValueError('Unsupported question type')

@@ -1,36 +1,15 @@
-# Validation — OpenAI-only build
+# Validation — uploaded baseline fix branch
 
-## Implemented and verified locally
+The original uploaded branch passed 93 Python tests before edits. The updated result is recorded in `pytest-results.txt`; new coverage includes concurrency eligibility, overlapping calls, single-process duplicate suppression, cross-service atomic commits, simultaneous different candidates, full question context, normalized options, Unicode inputs, completed progress, static caching and lock cleanup after failures.
 
-- `OPENAI_API_KEY` alone selects the official OpenAI endpoint, defaults to `gpt-4o-mini`, generates questions and evaluates written answers.
-- Legacy provider keys and alternate base URL settings do not change the provider.
-- Demo storage is the default; Supabase remains optional. `run.py --demo` overrides stale database settings explicitly.
-- Question requests cap output at 360 tokens; written evaluation requests cap it at 240.
-- Written answers are capped at 3,000 characters; generation context uses an 800-character answer excerpt and bounded recent context.
-- Refresh, MCQ grading, report generation and interview follow-ups make no AI requests.
-- Provider errors, malformed outputs and timeouts fall back locally; network/JSON failure cooldown avoids repeated calls for 60 seconds.
-- Stored generated questions are displayed and graded from the same private snapshot. Server-selected skill, difficulty, identity and points cannot be changed by provider output.
-- Existing CSRF, candidate ownership, duplicate/completion checks, bank locking, atomic persistence and safe diagnostic codes remain covered.
+Seven additional DOM interaction checks passed using an isolated jsdom test harness (a QA-only tool, not an application dependency). They cover JSON question updates, mixed answer controls, focus/progress/CSRF, safe text rendering, double-click suppression, validation errors preserving drafts, lost-response reconciliation and native form fallback. This is DOM simulation, not visual browser verification; see `ui-validation.json`.
 
-## Actual checks
+The installed Python HTTPX client explicitly supports use across threads. A synchronization-barrier test proves evaluation and generation overlap on eligible turns. A score sweep checks unchanged selection from correctness 0 through 1. Grade-dependent and terminal turns do not use the concurrent path.
 
-Python 3.13.15. Dependencies installed; compilation, pytest, dependency checks and the live Flask HTTP walkthrough executed. See `pytest-results.txt` for the final regression count/timing and `http-validation.json` for the live result.
+Before/after controlled benchmarks use the identical runner against the committed upload baseline and the fix branch, with fixed simulated provider and repository delays. `performance-before.json`, `performance-after.json` and `performance-summary.json` record measured medians and request/read counts. These numbers exclude human answer time and are not live OpenAI latency claims. Run `python tests/benchmark_transitions.py` to reproduce the current-branch experiment.
 
-The complete generated-question AND AI-graded-answer flow was exercised using the real OpenAI SDK against `httpx.MockTransport`. The test verifies the official endpoint, token caps, exact displayed-question grading, full report, and number of generation/evaluation calls. This is a simulated provider test, not a live API call.
+The actual Flask HTTP server also completed the no-key fallback walkthrough, with 15 unique questions, generated report, rejected late submission and working recruiter creation. See `http-validation.json`. Compilation, dependency checks and the database doctor command succeeded.
 
-The live HTTP test uses the actual Flask server in demo/local fallback mode: 15 unique questions, 43 successful HTTP responses, completion/report creation, rejection of late submissions and recruiter creation.
+## Remaining validation limits
 
-## Limitations
-
-No live OpenAI key was supplied, so account/model access, real response quality and actual token usage/cost remain unverified. Supabase schema/RPC execution and visual desktop/mobile browser validation also remain unverified. The managed browser previously blocked localhost. No claim of perfect operation in every environment is made.
-
-## Relevant fixes retained
-
-- Installed the requested Python runtime.
-- Corrected initial test-scaffolding paths and made HTTP test-server startup/teardown deterministic.
-- Added SOCKS support to the existing HTTPX transport and a safe AI-client initialization fallback.
-- Repaired interrupted demo seeding without duplicating questions.
-- Added explicit database mode, a doctor command and categorized 503 error references.
-- Removed recruiter navigation from candidate focus mode.
-
-The user's earlier 503 was not accompanied by its failing request/log; its exact cause remains unconfirmed. The diagnostics now distinguish database schema/access/connectivity errors and other application failures without exposing secrets.
+No live OpenAI key or Supabase project was supplied. Real provider speed/quality, model/account permissions and PostgreSQL transactions remain unverified. Visual desktop/mobile and print layout checks remain unperformed; a previous managed browser attempt blocked localhost. The repository includes safe fallback paths, but tests cannot certify the absence of every possible defect or a production security posture.

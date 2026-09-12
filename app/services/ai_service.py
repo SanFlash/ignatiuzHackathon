@@ -47,7 +47,7 @@ class AIService:
     def evaluate_subjective(self, question, answer):
         if self.client and not self.local_evaluation:
             try:
-                data = self._json({'question': question['question_text'][:1000], 'rubric': question['rubric'],
+                data = self._json({'question': question['question_text'], 'rubric': question['rubric'],
                                    'competency': question['skill'], 'answer': answer[:3000]},
                                   'Return correctness (number 0–1), strengths, weaknesses, evidence '
                                   '(each an array of strings), and feedback (string). '

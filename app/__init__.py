@@ -2,6 +2,7 @@ import hmac
 import logging
 import os
 import secrets
+import hashlib
 from flask import Flask, jsonify, render_template, request, session
 from pathlib import Path
 from dotenv import load_dotenv
@@ -16,6 +17,8 @@ from app.services.assessment_service import AssessmentService
 def create_app(config=None, repository=None, ai_service=None):
     load_dotenv(Path(__file__).resolve().parents[1] / '.env')
     app = Flask(__name__)
+    assets = Path(app.static_folder)
+    asset_version = hashlib.sha256((assets / 'style.css').read_bytes() + (assets / 'app.js').read_bytes()).hexdigest()[:12]
     configured_secret = os.getenv('SECRET_KEY', '')
     app.config.update(SECRET_KEY=configured_secret if configured_secret and configured_secret != 'change-me' else secrets.token_hex(32),
                       DATABASE_MODE=os.getenv('DATABASE_MODE', 'demo').strip().lower(),
@@ -82,12 +85,12 @@ def create_app(config=None, repository=None, ai_service=None):
         session.setdefault('csrf_token', secrets.token_urlsafe(32))
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and app.config['CSRF_ENABLED']:
             supplied = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token', '')
-            if not isinstance(supplied, str) or not hmac.compare_digest(supplied, session['csrf_token']):
+            if not isinstance(supplied, str) or not hmac.compare_digest(supplied.encode('utf-8'), session['csrf_token'].encode('utf-8')):
                 raise AppError('Your form expired. Reload the page and try again.', 400)
 
     @app.context_processor
     def context():
-        return {'demo_mode': repository.demo, 'ai_status': ai.status,
+        return {'demo_mode': repository.demo, 'ai_status': ai.status, 'asset_version': asset_version,
                 'recruiter_open': not app.config['RECRUITER_PASSWORD'], 'csrf_token': session.get('csrf_token', '')}
 
     @app.after_request
@@ -95,7 +98,7 @@ def create_app(config=None, repository=None, ai_service=None):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
-        response.headers['Cache-Control'] = 'no-store'
+        response.headers['Cache-Control'] = 'public, max-age=3600' if request.endpoint == 'static' else 'no-store'
         response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         return response
 

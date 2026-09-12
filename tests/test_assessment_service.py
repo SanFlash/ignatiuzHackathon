@@ -55,8 +55,10 @@ def test_failure_preserves_state(service, repo, monkeypatch):
     with pytest.raises(RuntimeError): service.submit(a['id'], q['id'], best_answer(q))
     assert service.get_attempt(a['id']) == a and repo.list_responses(a['id']) == []
 
-def test_concurrent_submit(service, repo, monkeypatch):
+def test_concurrent_submit_across_service_instances(service, repo, monkeypatch):
     a = service.start(DEMO_ID); q = next(q for q in repo.list_questions(DEMO_ID) if q['id'] == a['current_question_id'])
+    from app.services.assessment_service import AssessmentService
+    workers = [service, AssessmentService(repo, service.ai)]
     original = repo.commit_answer; barrier = Barrier(2)
     def synchronized(*args):
         barrier.wait(timeout=5)
@@ -64,7 +66,7 @@ def test_concurrent_submit(service, repo, monkeypatch):
     monkeypatch.setattr(repo, 'commit_answer', synchronized)
     def submit(_):
         try:
-            service.submit(a['id'], q['id'], best_answer(q)); return 'saved'
+            workers[_].submit(a['id'], q['id'], best_answer(q)); return 'saved'
         except Conflict: return 'conflict'
     with ThreadPoolExecutor(max_workers=2) as executor: results = list(executor.map(submit, range(2)))
     assert sorted(results) == ['conflict', 'saved']

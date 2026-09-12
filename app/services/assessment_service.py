@@ -1,6 +1,8 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 from uuid import uuid4
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from app.errors import AppError, Conflict
 from app.services.catalog_service import CatalogService, identifier
 from app.services.adaptive_engine import AdaptiveEngine
@@ -16,6 +18,9 @@ class AssessmentService:
         self.catalog = CatalogService(repo)
         self.engine = AdaptiveEngine()
         self.questions = QuestionService(ai)
+        # Active IDs are removed in finally; unrelated attempts never block each other.
+        self._submission_guard = Lock()
+        self._active_submissions = set()
 
     def get_attempt(self, attempt_id):
         attempt = self.repo.get_attempt(identifier(attempt_id))
@@ -44,19 +49,54 @@ class AssessmentService:
     def public_attempt(self, attempt_id):
         attempt = self.get_attempt(attempt_id)
         assessment = self.catalog.assessment(attempt['assessment_id'])
+        pool = None
+        if attempt['current_question_id'] and not attempt.get('question_override'):
+            pool = self.repo.list_questions(assessment['id'])
+        return self._public(attempt, assessment, pool)
+
+    @staticmethod
+    def _public(attempt, assessment, pool=None):
         question = None
         if attempt['current_question_id']:
-            stored = next((q for q in self.repo.list_questions(assessment['id'])
-                           if q['id'] == attempt['current_question_id']), None)
+            stored = attempt.get('question_override') or next(
+                (q for q in (pool or []) if q['id'] == attempt['current_question_id']), None)
             if not stored:
                 raise AppError('The current question is unavailable. Contact the assessment administrator.', 409)
-            stored = attempt.get('question_override') or stored
             question = {k: stored[k] for k in ('id', 'question_text', 'skill', 'difficulty', 'question_type', 'options')}
         return {'id': attempt['id'], 'title': assessment['title'], 'status': attempt['status'],
                 'answered_count': len(attempt['answered_ids']), 'max_questions': assessment['max_questions'],
-                'progress': round(100 * len(attempt['answered_ids']) / assessment['max_questions']), 'question': question}
+                'progress': 100 if attempt['status'] == 'completed' else round(
+                    100 * len(attempt['answered_ids']) / assessment['max_questions']), 'question': question}
+
+    def _independent_next(self, assessment, attempt, question, pool):
+        """Prove next selection cannot depend on the current pending grade.
+
+        Evidence counts/confidence do not depend on correctness. If the current
+        skill is excluded by the hard coverage guard, only unchanged skill
+        estimates can participate in the next ranking. No speculative grading.
+        """
+        state = self.engine.update(attempt['skill_state'], question['skill'], {'observed_level': 2.5})
+        answered = attempt['answered_ids'] + [question['id']]
+        ranked = self.engine.rank_questions(pool, state, answered, assessment['priorities'])
+        if not ranked or any(q['skill'] == question['skill'] for _, q in ranked):
+            return None
+        if self.engine.termination(assessment, state, len(answered), bool(ranked)):
+            return None
+        return ranked[0][1]
 
     def submit(self, attempt_id, question_id, answer):
+        canonical_id = identifier(attempt_id)
+        with self._submission_guard:
+            if canonical_id in self._active_submissions:
+                raise Conflict('A submission is already processing. Check progress before trying again.')
+            self._active_submissions.add(canonical_id)
+        try:
+            return self._submit(canonical_id, question_id, answer)
+        finally:
+            with self._submission_guard:
+                self._active_submissions.discard(canonical_id)
+
+    def _submit(self, attempt_id, question_id, answer):
         attempt = self.get_attempt(attempt_id)
         if attempt['status'] == 'completed':
             raise AppError('This assessment is already completed.', 409)
@@ -71,12 +111,30 @@ class AssessmentService:
         if not question:
             raise AppError('Question not found.', 404)
         question = attempt.get('question_override') or question
+        previous_responses = None
+        parallel_question = None
+        prepared_override = None
         if question['question_type'] == 'MCQ':
+            # Normalize legacy padded options without making answer keys public.
+            question['options'] = [option.strip() for option in question['options']]
+            question['correct_answer'] = question['correct_answer'].strip()
             if answer not in question['options']:
                 raise AppError('Select one of the provided options.')
             evaluation = self.ai.evaluate_mcq(question, answer)
         elif question['question_type'] == 'Subjective':
-            evaluation = self.ai.evaluate_subjective(question, answer)
+            if self.ai.client and self.ai.generate_questions and not self.ai.local_evaluation:
+                parallel_question = self._independent_next(assessment, attempt, question, pool)
+            if parallel_question:
+                previous_responses = self.repo.list_responses(attempt_id)
+                seen = self._seen_questions(previous_responses, question)
+                # Both calls use the submitted answer. Generation does not receive
+                # an invented grade; server selection was proven independent above.
+                with ThreadPoolExecutor(max_workers=2, thread_name_prefix='assessment-ai') as executor:
+                    future = executor.submit(self.questions.prepare, parallel_question, question, answer, None, seen)
+                    evaluation = self.ai.evaluate_subjective(question, answer)
+                    prepared_override = future.result()
+            else:
+                evaluation = self.ai.evaluate_subjective(question, answer)
         else:
             raise AppError('Coding execution is a future extension.', 409)
         evaluation['question_snapshot'] = deepcopy(question)
@@ -92,16 +150,26 @@ class AssessmentService:
         report = None
         attempt['question_override'] = None
         if not reason and self.ai.generate_questions:
-            previous_responses = self.repo.list_responses(attempt_id)
-            seen = [r['evaluation'].get('question_snapshot', {}).get('question_text', '') for r in previous_responses]
-            seen.append(question['question_text'])
-            attempt['question_override'] = self.questions.prepare(next_question, question, answer, evaluation, seen)
+            if parallel_question and parallel_question['id'] == next_question['id']:
+                attempt['question_override'] = prepared_override
+            elif not parallel_question:
+                if previous_responses is None:
+                    previous_responses = self.repo.list_responses(attempt_id)
+                seen = self._seen_questions(previous_responses, question)
+                attempt['question_override'] = self.questions.prepare(next_question, question, answer, evaluation, seen)
+            # Defensive mismatch: use the engine-selected bank item, never a wrong
+            # speculative item or an extra paid retry.
         if reason:
             attempt.update(status='completed', termination_reason=reason, completed_at=now())
-            responses = self.repo.list_responses(attempt_id) + [response]
+            responses = (previous_responses if previous_responses is not None else
+                         self.repo.list_responses(attempt_id)) + [response]
             report = self._report(attempt, responses)
         self.repo.commit_answer(version, attempt, response, report)
-        return self.public_attempt(attempt_id)
+        return self._public(attempt, assessment, pool)
+
+    @staticmethod
+    def _seen_questions(responses, question):
+        return [r['evaluation'].get('question_snapshot', {}).get('question_text', '') for r in responses] + [question['question_text']]
 
     def _report(self, attempt, responses):
         state = deepcopy(attempt['skill_state'])

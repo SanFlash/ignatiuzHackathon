@@ -1,0 +1,26 @@
+{
+  "provider": "simulated, no external calls",
+  "simulated_provider_delay_ms": 100,
+  "simulated_read_delay_ms": 5,
+  "runs": 3,
+  "scenarios": {
+    "eligible_written_transition": {
+      "median_ms": 126.66,
+      "questions": 1,
+      "counts": {
+        "grade": 1,
+        "generate": 1,
+        "reads": 5
+      }
+    },
+    "complete_assessment": {
+      "median_ms": 2110.23,
+      "questions": 15,
+      "counts": {
+        "grade": 7,
+        "generate": 15,
+        "reads": 77
+      }
+    }
+  }
+}

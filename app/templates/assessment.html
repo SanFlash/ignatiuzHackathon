@@ -1,1 +1,37 @@
-{% extends 'base.html' %}{% block title %}Assessment · Aptiva{% endblock %}{% block content %}<div class="assessment-shell"><div class="section-heading"><div><div class="eyebrow">FOCUS MODE</div><h2>{{ attempt.title }}</h2></div><span class="muted">Question {{ attempt.answered_count + 1 }} <span class="muted">/ up to {{ attempt.max_questions }}</span></span></div><progress aria-label="Assessment progress" value="{{ attempt.answered_count }}" max="{{ attempt.max_questions }}"></progress><div class="question-meta"><span>{{ attempt.answered_count }} submitted</span><span>Your path adapts after each answer</span></div><article class="card question-card"><div class="tags"><span class="tag accent">{{ attempt.question.skill }}</span><span class="tag">Difficulty {{ attempt.question.difficulty }} / 5</span><span class="tag">{{ attempt.question.question_type }}</span></div><h1>{{ attempt.question.question_text }}</h1><form method="post" action="{{ url_for('web.answer', attempt_id=attempt.id) }}" class="answer-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="question_id" value="{{ attempt.question.id }}">{% if attempt.question.question_type == 'MCQ' %}<fieldset><legend class="muted">Select one answer</legend>{% for option in attempt.question.options %}<label class="answer-option"><input type="radio" name="answer" value="{{ option }}" required><span class="option-letter">{{ 'ABCDEFGH'[loop.index0] }}</span><span>{{ option }}</span></label>{% endfor %}</fieldset>{% else %}<label class="form-stack">Your answer<textarea name="answer" required maxlength="3000" rows="9" placeholder="Explain your approach, reasoning, and trade-offs…"></textarea></label><p class="muted small">Be specific. Examples help demonstrate your understanding. Maximum 3,000 characters.</p>{% endif %}<div class="submit-row"><span class="muted small">Answers are final once submitted.</span><button type="submit" class="button primary">Submit & continue →</button></div><p class="loading-message" role="status" hidden>Evaluating your answer and choosing the next question…</p></form></article><p class="center muted small">A focused assessment. A path unique to your answers.</p></div>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Assessment · Aptiva{% endblock %}
+{% block content %}
+<div class="assessment-shell">
+  <div class="section-heading">
+    <div><div class="eyebrow">FOCUS MODE</div><h2>{{ attempt.title }}</h2></div>
+    <span class="muted" id="question-counter">Question {{ attempt.answered_count + 1 }} / up to {{ attempt.max_questions }}</span>
+  </div>
+  <progress id="assessment-progress" aria-label="Assessment progress" value="{{ attempt.answered_count }}" max="{{ attempt.max_questions }}"></progress>
+  <div class="question-meta"><span id="answered-count">{{ attempt.answered_count }} submitted</span><span>Your path adapts after each answer</span></div>
+  <article class="card question-card" id="question-card">
+    <div class="tags"><span class="tag accent" id="question-skill">{{ attempt.question.skill }}</span><span class="tag" id="question-difficulty">Difficulty {{ attempt.question.difficulty }} / 5</span><span class="tag" id="question-type-label">{{ attempt.question.question_type }}</span></div>
+    <h1 id="question-title" tabindex="-1">{{ attempt.question.question_text }}</h1>
+    <form method="post" action="{{ url_for('web.answer', attempt_id=attempt.id) }}" class="answer-form"
+          data-api-url="{{ url_for('web.api_attempt', attempt_id=attempt.id) }}" data-report-url="{{ url_for('web.report', attempt_id=attempt.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="question_id" value="{{ attempt.question.id }}">
+      <div id="answer-controls">
+        {% if attempt.question.question_type == 'MCQ' %}
+        <fieldset><legend class="muted">Select one answer</legend>
+          {% for option in attempt.question.options %}
+          <label class="answer-option"><input type="radio" name="answer" value="{{ option }}" required><span class="option-letter">{{ 'ABCDEFGH'[loop.index0] }}</span><span>{{ option }}</span></label>
+          {% endfor %}
+        </fieldset>
+        {% else %}
+        <label class="form-stack">Your answer<textarea name="answer" required maxlength="3000" rows="9" placeholder="Explain your approach, reasoning, and trade-offs…"></textarea></label>
+        <p class="muted small">Be specific. Examples help demonstrate your understanding. Maximum 3,000 characters.</p>
+        {% endif %}
+      </div>
+      <div class="submit-row"><span class="muted small">Answers are final once submitted.</span><button type="submit" class="button primary">Submit & continue →</button></div>
+      <p class="loading-message" role="status" hidden>Evaluating your answer and preparing the next question…</p>
+      <div class="answer-error notice" role="alert" hidden><p id="answer-error-text"></p><button type="button" class="button secondary small-button" id="check-progress">Check saved progress</button></div>
+    </form>
+  </article>
+  <p class="center muted small">A focused assessment. A path unique to your answers.</p>
+</div>
+{% endblock %}

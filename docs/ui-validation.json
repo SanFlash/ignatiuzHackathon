@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "checks": 7,
+  "results": [
+    "JSON transition, progress, focus, CSRF and safe text rendering",
+    "MCQ to written to MCQ transitions",
+    "Double submit sends exactly one request",
+    "Validation failure preserves answer and unlocks submit",
+    "Lost acknowledgement reconciles using GET without re-posting",
+    "Offline draft preserved; explicit progress check permits retry",
+    "Native form remains available without fetch"
+  ],
+  "environment": "jsdom DOM simulation; not visual browser verification"
+}

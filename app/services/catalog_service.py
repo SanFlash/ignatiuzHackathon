@@ -72,7 +72,11 @@ class CatalogService:
         options = data.get('options', [])
         if isinstance(options, str):
             options = [x.strip() for x in options.splitlines() if x.strip()]
+        if isinstance(options, list) and all(isinstance(x, str) for x in options):
+            options = [x.strip() for x in options]
         correct = data.get('correct_answer', '')
+        if isinstance(correct, str):
+            correct = correct.strip()
         if kind == 'MCQ' and (not isinstance(options, list) or not 2 <= len(options) <= 8
                 or any(not isinstance(x, str) or not x or len(x) > 1000 for x in options)
                 or len(set(options)) != len(options) or correct not in options):
