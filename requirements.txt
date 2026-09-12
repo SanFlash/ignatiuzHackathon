@@ -1,0 +1,7 @@
+Flask>=3.1,<4
+python-dotenv>=1.1,<2
+supabase>=2.15,<3
+openai>=1.70,<3
+pytest>=8.3,<10
+# Uses the existing HTTP client with SOCKS support for proxy/VPN environments.
+httpx[socks]>=0.28,<0.29

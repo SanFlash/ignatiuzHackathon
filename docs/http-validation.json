@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "http_200_responses": 43,
+  "unique_questions": 15,
+  "difficulty_sequence": [
+    2,
+    2,
+    3,
+    2,
+    3,
+    1,
+    1,
+    1,
+    4,
+    4,
+    3,
+    3,
+    3,
+    2,
+    2
+  ],
+  "completed_attempt_rejected": true,
+  "report_generated": true,
+  "recruiter_creation": true,
+  "demo_mode": true,
+  "browser_visual_validation": false
+}
