@@ -27,6 +27,12 @@ def attempt_access(attempt_id):
         raise AppError('Open this attempt in the browser where you started it.', 403)
 
 
+@bp.get('/health')
+def health():
+    # Liveness only: no database reads, model calls, or session creation.
+    return jsonify(status='ok')
+
+
 @bp.get('/')
 def home(): return render_template('index.html', assessments=catalog().list_assessments())
 

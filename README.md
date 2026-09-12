@@ -1,5 +1,9 @@
 # Aptiva — OpenAI Adaptive Assessment
 
+## Deploy on Render
+
+Render configuration is included: `render.yaml`, `gunicorn.conf.py`, `requirements-render.txt`, Python version pin, and `/health`. Download the complete package from `downloads/adaptive-assessment-fixed.zip`. Follow [the Render deployment guide](docs/RENDER.md) to connect this branch, set the recruiter password and optionally add `OPENAI_API_KEY`. Demo storage resets on restarts; enable Supabase for persistence.
+
 ## Fix branch from your uploaded project
 
 This version is based on the supplied `adaptive-assessment (3).zip`, on branch `fix/question-speed-and-reliability`. The full source and a portable `branch-history.bundle` are included. See `docs/FIXES.md` for changes, verification and measured results.

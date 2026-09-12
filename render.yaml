@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ignatiuz-adaptive-assessment
+    runtime: python
+    plan: free
+    repo: https://github.com/SanFlash/ignatiuzHackathon
+    branch: fix/question-speed-and-reliability
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: gunicorn --config gunicorn.conf.py run:app
+    healthCheckPath: /health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: RECRUITER_PASSWORD
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: DATABASE_MODE
+        value: demo
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: PYTHONUNBUFFERED
+        value: "1"

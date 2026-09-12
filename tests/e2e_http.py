@@ -29,7 +29,7 @@ class Page(HTMLParser):
     def handle_data(self, data): self.text.append(data)
 
 
-def run():
+def run(recruiter_password=""):
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
     requests = 0
     def fetch(path, data=None):
@@ -42,6 +42,9 @@ def run():
     _, home = fetch('/')
     assert 'DEMO MODE' in home
     for path in set(Page(home).links): fetch(path)
+    if recruiter_password:
+        _, login = fetch('/recruiter/login')
+        fetch('/recruiter/login', {'csrf_token': Page(login).fields['csrf_token'], 'password': recruiter_password})
     _, dashboard = fetch('/recruiter'); assert 'RECRUITER WORKSPACE' in dashboard
     start_path = next(x for x in Page(home).links if x.endswith('/start'))
     _, start = fetch(start_path)

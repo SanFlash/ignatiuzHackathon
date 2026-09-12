@@ -25,10 +25,15 @@ def create_app(config=None, repository=None, ai_service=None):
                       SUPABASE_URL=os.getenv('SUPABASE_URL', '').strip(), SUPABASE_KEY=os.getenv('SUPABASE_KEY', ''),
                       RECRUITER_PASSWORD=os.getenv('RECRUITER_PASSWORD', ''), MAX_CONTENT_LENGTH=65536,
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
-                      SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE', '').lower() == 'true',
+                      SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE', os.getenv('RENDER', '')).lower() == 'true',
                       CSRF_ENABLED=True, SEED_DEMO=True)
     if config:
         app.config.update(config)
+    if os.getenv('RENDER', '').lower() == 'true':
+        if not configured_secret or configured_secret == 'change-me':
+            raise RuntimeError('Render requires a stable SECRET_KEY. Set it in the service environment.')
+        if not app.config['RECRUITER_PASSWORD'].strip():
+            raise RuntimeError('Render requires RECRUITER_PASSWORD to protect the recruiter dashboard.')
     logging.basicConfig(level=logging.INFO)
     if app.config['DATABASE_MODE'] not in ('auto', 'demo', 'supabase'):
         raise RuntimeError('DATABASE_MODE must be demo, supabase or auto.')
@@ -82,6 +87,8 @@ def create_app(config=None, repository=None, ai_service=None):
 
     @app.before_request
     def csrf_protection():
+        if request.endpoint in ('web.health', 'static'):
+            return
         session.setdefault('csrf_token', secrets.token_urlsafe(32))
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and app.config['CSRF_ENABLED']:
             supplied = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token', '')
